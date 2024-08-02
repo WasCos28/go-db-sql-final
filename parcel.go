@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	_ "modernc.org/sqlite"
 )
 
@@ -63,13 +62,16 @@ func (s ParcelStore) GetByClient(client int) ([]Parcel, error) {
 	var res []Parcel
 
 	for rows.Next() {
-		ress := Parcel{}
-		err := rows.Scan(&ress.Number, &ress.Client, &ress.Status, &ress.Address, &ress.CreatedAt)
+		info := Parcel{}
+		err := rows.Scan(&info.Number, &info.Client, &info.Status, &info.Address, &info.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, ress)
+		res = append(res, info)
 
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return res, nil
@@ -87,32 +89,20 @@ func (s ParcelStore) SetStatus(number int, status string) error {
 }
 
 func (s ParcelStore) SetAddress(number int, address string) error {
-	// реализуйте обновление адреса в таблице parcel
-	// менять адрес можно только если значение статуса registered
-	status, err := s.Get(number)
-	if err != nil {
-		return err
-	}
-	if status.Status == "registered" {
-		_, err := s.db.Exec("UPDATE parcel SET address = :address WHERE number = :number",
-			sql.Named("address", address),
-			sql.Named("number", number))
-		return err
-	}
-	return fmt.Errorf("Менять адрес можно только если значение статуса registered")
+	// Обновление адреса с условием, что статус равен 'registered'
+	_, err := s.db.Exec(
+		"UPDATE parcel SET address = :address WHERE number = :number AND status = 'registered'",
+		sql.Named("address", address),
+		sql.Named("number", number),
+	)
+	return err
 }
 
 func (s ParcelStore) Delete(number int) error {
 	// реализуйте удаление строки из таблицы parcel
 	// удалять строку можно только если значение статуса registered
-	status, err := s.Get(number)
-	if err != nil {
-		return err
-	}
-	if status.Status == "registered" {
-		_, err := s.db.Exec("DELETE FROM parcel WHERE number = :number",
-			sql.Named("number", number))
-		return err
-	}
-	return fmt.Errorf("Удалять строку можно только если значение статуса registered")
+	_, err := s.db.Exec("DELETE FROM parcel WHERE number = :number AND status = 'registered'",
+		sql.Named("number", number),
+	)
+	return err
 }

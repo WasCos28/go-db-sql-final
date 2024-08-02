@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 )
@@ -29,13 +30,18 @@ func getTestParcel() Parcel {
 	}
 }
 
+// Функция для перевода строки в формат time.Time
+func parseTime(t *testing.T, timeString string) time.Time {
+	parsedTime, err := time.Parse(time.RFC3339, timeString)
+	require.NoError(t, err)
+	return parsedTime
+}
+
 // TestAddGetDelete проверяет добавление, получение и удаление посылки
 func TestAddGetDelete(t *testing.T) {
 	// prepare
-	db, err := sql.Open("sqlite", "/Users/kvashchenko/my_education/go/go-db-sql-final/tracker.db")
-	if err != nil {
-		require.NoError(t, err)
-	}
+	db, err := sql.Open("sqlite", "tracker.db")
+	require.NoError(t, err)
 	defer db.Close()
 
 	store := NewParcelStore(db)
@@ -49,27 +55,32 @@ func TestAddGetDelete(t *testing.T) {
 	// get
 	retrievedParcel, err := store.Get(id)
 	require.NoError(t, err)
-	require.Equal(t, parcel.Client, retrievedParcel.Client)
-	require.Equal(t, parcel.Status, retrievedParcel.Status)
-	require.Equal(t, parcel.Address, retrievedParcel.Address)
-	require.Equal(t, parcel.CreatedAt, retrievedParcel.CreatedAt)
+
+	assert.Equal(t, parcel.Client, retrievedParcel.Client)
+	assert.Equal(t, parcel.Status, retrievedParcel.Status)
+	assert.Equal(t, parcel.Address, retrievedParcel.Address)
+
+	parcelCreatedAt := parseTime(t, parcel.CreatedAt)
+	retrievedParcelCreatedAt := parseTime(t, retrievedParcel.CreatedAt)
+	assert.WithinDuration(t, parcelCreatedAt, retrievedParcelCreatedAt, 0)
 	// получите только что добавленную посылку, убедитесь в отсутствии ошибки
 	// проверьте, что значения всех полей в полученном объекте совпадают со значениями полей в переменной parcel
 
 	// delete
-	require.NoError(t, err)
 	// удалите добавленную посылку, убедитесь в отсутствии ошибки
+	err = store.Delete(id)
+	require.NoError(t, err)
 	// проверьте, что посылку больше нельзя получить из БД
 	_, err = store.Get(id)
-	if err != nil {
-		require.Error(t, err) // Должна быть ошибка, т.к. запись удалена
-	}
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, sql.ErrNoRows)
+	// Должна быть ошибка, т.к. запись удалена
 }
 
 // TestSetAddress проверяет обновление адреса
 func TestSetAddress(t *testing.T) {
 	// prepare
-	db, err := sql.Open("sqlite", "/Users/kvashchenko/my_education/go/go-db-sql-final/tracker.db")
+	db, err := sql.Open("sqlite", "tracker.db")
 	if err != nil {
 		require.NoError(t, err)
 	}
@@ -88,15 +99,15 @@ func TestSetAddress(t *testing.T) {
 	require.NoError(t, err)
 	// check
 	updatedParcel, err := store.Get(id)
-	require.NoError(t, err)
-	require.Equal(t, newAddress, updatedParcel.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, newAddress, updatedParcel.Address)
 	// получите добавленную посылку и убедитесь, что адрес обновился
 }
 
 // TestSetStatus проверяет обновление статуса
 func TestSetStatus(t *testing.T) {
 	// prepare
-	db, err := sql.Open("sqlite", "/Users/kvashchenko/my_education/go/go-db-sql-final/tracker.db")
+	db, err := sql.Open("sqlite", "tracker.db")
 	if err != nil {
 		require.NoError(t, err)
 	}
@@ -118,14 +129,14 @@ func TestSetStatus(t *testing.T) {
 	// check
 	// получите добавленную посылку и убедитесь, что статус обновился
 	updatedParcel, err := store.Get(id)
-	require.NoError(t, err)
-	require.Equal(t, newStatus, updatedParcel.Status)
+	assert.NoError(t, err)
+	assert.Equal(t, newStatus, updatedParcel.Status)
 }
 
 // TestGetByClient проверяет получение посылок по идентификатору клиента
 func TestGetByClient(t *testing.T) {
 	// prepare
-	db, err := sql.Open("sqlite", "/Users/kvashchenko/my_education/go/go-db-sql-final/tracker.db")
+	db, err := sql.Open("sqlite", "tracker.db")
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -169,16 +180,9 @@ func TestGetByClient(t *testing.T) {
 	// убедитесь, что количество полученных посылок совпадает с количеством добавленных
 
 	// check
-	for _, parcel := range storedParcels {
-		originalParcel, exists := parcelMap[parcel.Number]
-		require.True(t, exists)
+	assert.ElementsMatch(t, parcels, storedParcels)
 
-		require.Equal(t, originalParcel.Client, parcel.Client)
-		require.Equal(t, originalParcel.Status, parcel.Status)
-		require.Equal(t, originalParcel.Address, parcel.Address)
-		require.Equal(t, originalParcel.CreatedAt, parcel.CreatedAt)
-		// в parcelMap лежат добавленные посылки, ключ - идентификатор посылки, значение - сама посылка
-		// убедитесь, что все посылки из storedParcels есть в parcelMap
-		// убедитесь, что значения полей полученных посылок заполнены верно
-	}
+	// в parcelMap лежат добавленные посылки, ключ - идентификатор посылки, значение - сама посылка
+	// убедитесь, что все посылки из storedParcels есть в parcelMap
+	// убедитесь, что значения полей полученных посылок заполнены верно
 }
